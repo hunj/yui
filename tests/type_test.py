@@ -2,27 +2,24 @@ from typing import (
     Any,
     Dict,
     List,
-    Mapping,
-    MutableSequence,
     NewType,
     Optional,
-    Sequence,
     Set,
     Tuple,
     Union,
 )
 
-from attrdict import AttrDict
-
 import pytest
 
 from yui.type import (
+    AllChannelsError,
     ChannelFromConfig,
     ChannelsFromConfig,
     DirectMessageChannel,
     FromChannelID,
     FromUserID,
     Namespace,
+    NoChannelsError,
     PrivateChannel,
     PublicChannel,
     UnknownChannel,
@@ -55,29 +52,18 @@ def test_cast():
     assert cast(int, '3') == 3
     assert cast(List[str], ('kirito', 'asuna')) == ['kirito', 'asuna']
     assert cast(List[int], ('1', '2', '3')) == [1, 2, 3]
-    assert cast(Sequence[int], ('1', '2', '3')) == [1, 2, 3]
-    assert cast(MutableSequence[int], ('1', '2', '3')) == [1, 2, 3]
     assert cast(Tuple[int, float, str], ['1', '2', '3']) == (1, 2.0, '3')
     assert cast(Set[int], ['1', '1', '2']) == {1, 2}
     assert cast(Optional[int], 3) == 3
     assert cast(Optional[int], None) is None
     assert cast(Union[int, float], '3.2') == 3.2
-    assert cast(List[ID], [1, 2, 3]) == [ID(1), ID(2), ID(3)]
+    assert cast(List[ID], [1, 2, 3]) == [ID('1'), ID('2'), ID('3')]
     assert cast(Dict[str, Any], {1: 1, 2: 2.2}) == {'1': 1, '2': 2.2}
-    assert cast(Mapping[str, str], {1: 1, 2: 2.2}) == {'1': '1', '2': '2.2'}
+    assert cast(Dict[str, str], {1: 1, 2: 2.2}) == {'1': '1', '2': '2.2'}
     assert cast(List, ('kirito', 'asuna', 16.5)) == ['kirito', 'asuna', 16.5]
-    assert cast(Sequence, ('kirito', 'asuna', 16.5)) == [
-        'kirito', 'asuna', 16.5]
-    assert cast(MutableSequence, ('kirito', 'asuna', 16.5)) == [
-        'kirito', 'asuna', 16.5]
     assert cast(Tuple, ['1', 2, 3.0]) == ('1', 2, 3.0)
     assert cast(Set, {'1', 2, 3.0, 2}) == {'1', 2, 3.0}
     assert cast(Dict, {'1': 'kirito', 2: 'asuna', 3: 16.5}) == {
-        '1': 'kirito',
-        2: 'asuna',
-        3: 16.5,
-    }
-    assert cast(Mapping, {'1': 'kirito', 2: 'asuna', 3: 16.5}) == {
         '1': 'kirito',
         2: 'asuna',
         3: 16.5,
@@ -132,16 +118,14 @@ def test_cast():
     assert unexpected.name == 'firefox'
 
 
-def test_from_channel_id():
-    config = AttrDict({
-        'CHANNELS': {
-            'main': 'general',
-            'commons': ['general', 'random'],
-            'no': 'no',
-            'nos': ['no'],
-        },
-    })
-    bot = FakeBot(config)
+def test_from_channel_id(fx_config):
+    fx_config.CHANNELS = {
+        'main': 'general',
+        'commons': ['general', 'random'],
+        'no': 'no',
+        'nos': ['no'],
+    }
+    bot = FakeBot(fx_config)
     bot.add_channel('C1', 'general')
     bot.add_channel('C2', 'random')
     bot.add_channel('C3', 'food')
@@ -188,7 +172,7 @@ def test_from_channel_id():
     assert main.id == 'C1'
     assert main.name == 'general'
 
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError):
         FromChannelID.from_config('commons')
 
     with pytest.raises(KeyError):
@@ -206,7 +190,7 @@ def test_from_channel_id():
     assert commons[1].id == 'C2'
     assert commons[1].name == 'random'
 
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError):
         FromChannelID.from_config_list('main')
 
     with pytest.raises(KeyError):
@@ -264,14 +248,12 @@ def test_is_container():
     assert not is_container(bool)
 
 
-def test_channel_from_config():
-    config = AttrDict({
-        'CHANNELS': {
-            'main': 'general',
-            'commons': ['general', 'random'],
-        },
-    })
-    bot = FakeBot(config)
+def test_channel_from_config(fx_config):
+    fx_config.CHANNELS = {
+        'main': 'general',
+        'commons': ['general', 'random'],
+    }
+    bot = FakeBot(fx_config)
     bot.add_channel('C1', 'general')
     bot.add_channel('C2', 'random')
     bot.add_channel('C3', 'food')
@@ -289,14 +271,15 @@ def test_channel_from_config():
         ChannelFromConfig('no').get()
 
 
-def test_channels_from_config():
-    config = AttrDict({
-        'CHANNELS': {
-            'main': 'general',
-            'commons': ['general', 'random'],
-        },
-    })
-    bot = FakeBot(config)
+def test_channels_from_config(fx_config):
+    fx_config.CHANNELS = {
+        'main': 'general',
+        'commons': ['general', 'random'],
+        'all_1': '*',
+        'all_2': ['*'],
+        'empty': [],
+    }
+    bot = FakeBot(fx_config)
     bot.add_channel('C1', 'general')
     bot.add_channel('C2', 'random')
     bot.add_channel('C3', 'food')
@@ -314,3 +297,12 @@ def test_channels_from_config():
 
     with pytest.raises(KeyError):
         ChannelsFromConfig('no').get()
+
+    with pytest.raises(AllChannelsError):
+        ChannelsFromConfig('all_1').get()
+
+    with pytest.raises(AllChannelsError):
+        ChannelsFromConfig('all_2').get()
+
+    with pytest.raises(NoChannelsError):
+        ChannelsFromConfig('empty').get()

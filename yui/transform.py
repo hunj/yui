@@ -3,11 +3,15 @@ import re
 from decimal import Decimal
 from typing import Any, Callable, Optional, Sequence, TypeVar
 
+from .type import FromChannelID, FromUserID
+
 __all__ = (
     'DATE_FORMAT_RE',
     'choice',
     'enum_getitem',
     'extract_url',
+    'get_channel',
+    'get_user',
     'str_to_date',
     'value_range',
 )
@@ -15,12 +19,12 @@ __all__ = (
 T = TypeVar('T', int, float, Decimal)
 
 DATE_FORMAT_RE = re.compile(
-    '(\d{4})\s*[-\.년]?\s*(\d{1,2})\s*[-\.월]?\s*(\d{1,2})\s*일?'
+    r'(\d{4})\s*[-\.년]?\s*(\d{1,2})\s*[-\.월]?\s*(\d{1,2})\s*일?'
 )
 
 
 def str_to_date(
-    fallback: Optional[Callable[[], datetime.date]]=None
+    fallback: Optional[Callable[[], datetime.date]] = None,
 ) -> Callable[[str], Any]:
     """Helper to make date object from given string."""
 
@@ -43,18 +47,58 @@ def str_to_date(
     return callback
 
 
-def extract_url(value: str) -> str:
-    """Helper to extract URL from given value."""
-
-    if value.startswith('<') and value.endswith('>'):
-        if '|' in value:
-            return value[1:-1].split('|', 1)[1]
+def _extract(text: str) -> str:
+    if text.startswith('<') and text.endswith('>'):
+        if '|' in text:
+            return text[1:-1].split('|', 1)[1]
         else:
-            return value[1:-1]
-    return value
+            return text[1:-1]
+    return text
 
 
-def enum_getitem(cls, *, fallback: Optional[str]=None) -> Callable[[str], Any]:
+def extract_url(text: str) -> str:
+    """Helper to extract URL from given text."""
+
+    return _extract(text)
+
+
+def get_channel(text: str) -> FromChannelID:
+    """Helper to get Channel from given text."""
+
+    result = _extract(text)
+
+    if result.startswith('#'):
+        result = result[1:]
+    try:
+        return FromChannelID.from_id(result, raise_error=True)
+    except KeyError:
+        try:
+            return FromChannelID.from_name(result)
+        except KeyError:
+            raise ValueError('Given channel was not found')
+
+
+def get_user(text: str) -> FromUserID:
+    """Helper to get User from given text."""
+
+    result = _extract(text)
+
+    if result.startswith('@'):
+        result = result[1:]
+    try:
+        return FromUserID.from_id(result, raise_error=True)
+    except KeyError:
+        try:
+            return FromUserID.from_name(result)
+        except KeyError:
+            raise ValueError('Given user was not found')
+
+
+def enum_getitem(
+    cls,
+    *,
+    fallback: Optional[str] = None,
+) -> Callable[[str], Any]:
     """
     Helper to transform item to enum object by name from given enum
 
@@ -89,9 +133,9 @@ def enum_getitem(cls, *, fallback: Optional[str]=None) -> Callable[[str], Any]:
 def choice(
     items: Sequence[str],
     *,
-    fallback: Optional[str]=None,
-    case_insensitive: bool=False,
-    case: Optional['str']=None,
+    fallback: Optional[str] = None,
+    case_insensitive: bool = False,
+    case: Optional[str] = None,
 ) -> Callable[[str], str]:
     """
     Helper to constraint value to in items or raise error.
@@ -138,7 +182,12 @@ def choice(
     return callback
 
 
-def value_range(start: T, end: T, *, autofix: bool=False) -> Callable[[T], T]:
+def value_range(
+    start: T,
+    end: T,
+    *,
+    autofix: bool = False,
+) -> Callable[[T], T]:
     """
     Helper to constraint value to in range or raise error.
 

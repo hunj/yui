@@ -1,6 +1,8 @@
+import base64
 import datetime
 import unicodedata
 from typing import Dict
+from urllib.parse import urlencode
 
 from babel.dates import get_timezone
 
@@ -14,15 +16,19 @@ __all__ = (
     'KOREAN_END',
     'KOREAN_START',
     'TRUNCATE_QUERY',
+    'b64_redirect',
     'bold',
     'bool2str',
     'code',
+    'fuzzy_korean_partial_ratio',
     'fuzzy_korean_ratio',
     'get_count',
     'italics',
     'normalize_korean_nfc_to_nfd',
+    'now',
     'preformatted',
     'quote',
+    'static_vars',
     'strike',
     'strip_tags',
     'truncate_table',
@@ -69,10 +75,10 @@ def strip_tags(text: str) -> str:
     return fromstring(text).text_content()
 
 
-def now(tzname: str='Asia/Seoul') -> datetime.datetime:
+def now(tzname: str = 'Asia/Seoul') -> datetime.datetime:
     """Helper to make current datetime."""
 
-    return datetime.datetime.utcnow().astimezone(get_timezone(tzname))
+    return datetime.datetime.now(tz=get_timezone(tzname))
 
 
 def normalize_korean_nfc_to_nfd(value: str) -> str:
@@ -91,12 +97,30 @@ def normalize_korean_nfc_to_nfd(value: str) -> str:
 
 
 def fuzzy_korean_ratio(str1: str, str2: str) -> int:
-    """Fuzzy Search with Korean."""
+    """Fuzzy Search with Korean"""
 
     return fuzz.ratio(
         normalize_korean_nfc_to_nfd(str1),
         normalize_korean_nfc_to_nfd(str2),
     )
+
+
+def fuzzy_korean_partial_ratio(str1: str, str2: str) -> int:
+    """Fuzzy Search with partial Korean strings"""
+
+    nstr1 = normalize_korean_nfc_to_nfd(str1)
+    nstr2 = normalize_korean_nfc_to_nfd(str2)
+
+    len1 = len(nstr1)
+    len2 = len(nstr2)
+
+    ratio = fuzz.ratio(nstr1, nstr2)
+    if len1 * 1.2 < len2 or len2 * 1.2 < len1:
+        return int(
+            (fuzz.partial_ratio(nstr1, nstr2) * 2 + ratio) / 3
+        )
+    else:
+        return ratio
 
 
 def bold(text: str) -> str:
@@ -175,3 +199,13 @@ def static_vars(**kwargs):
 
         return func
     return decorator
+
+
+def b64_redirect(url: str) -> str:
+    """Redirect helper for non-http protocols."""
+
+    return 'https://item4.github.io/yui/helpers/b64-redirect.html?{}'.format(
+        urlencode({
+            'b64': base64.urlsafe_b64encode(url.encode()).decode(),
+        })
+    )
